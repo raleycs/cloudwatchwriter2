@@ -56,4 +56,4 @@ MIT
 
 ## Acknowledgements
 
-The original library was written by mac07 (https://github.com/mec07/cloudwatchwriter), I upgraded it to SDK v2. The work is based on logrus implementation (https://github.com/kdar/logrus-cloudwatchlogs) and a gist (https://gist.github.com/asdine/f821abe6189a04250ae61b77a3048bd9). Thanks all!
+The original library was written by mac07 (https://github.com/mec07/cloudwatchwriter). Credit to lzap (https://github.com/lzap) for changing the library to support SDKv2. The work is based on logrus implementation (https://github.com/kdar/logrus-cloudwatchlogs) and a gist (https://gist.github.com/asdine/f821abe6189a04250ae61b77a3048bd9)
