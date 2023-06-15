@@ -1,4 +1,4 @@
-module github.com/lzap/cloudwatchwriter2
+module github.com/raleycs/cloudwatchwriter2
 
 go 1.18
 
