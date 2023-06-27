@@ -46,21 +46,21 @@ type CloudWatchWriter struct {
 	sync.RWMutex
 	client            CloudWatchLogsClient
 	batchInterval     time.Duration
-	queue             *lane.Queue[*types.InputLogEvent]
+	queue             *lane.Deque[*types.InputLogEvent]
 	err               error
 	logGroupName      *string
 	logStreamName     *string
 	nextSequenceToken *string
 	closing           bool
 	done              chan struct{}
-	flush             bool	
+	flush             bool
 }
 
 // NewWithClient returns a pointer to a CloudWatchWriter struct, or an error. Works with AWS SDK v1 interface.
 func NewWithClient(client CloudWatchLogsClient, batchInterval time.Duration, logGroupName, logStreamName string) (*CloudWatchWriter, error) {
 	writer := &CloudWatchWriter{
 		client:        client,
-		queue:         lane.NewQueue[*types.InputLogEvent](),
+		queue:         lane.NewDeque[*types.InputLogEvent](),
 		logGroupName:  aws.String(logGroupName),
 		logStreamName: aws.String(logStreamName),
 		done:          make(chan struct{}),
@@ -142,7 +142,7 @@ func (c *CloudWatchWriter) Write(log []byte) (int, error) {
 		// Timestamp has to be in milliseconds since the epoch
 		Timestamp: aws.Int64(time.Now().UTC().UnixNano() / int64(time.Millisecond)),
 	}
-	c.queue.Enqueue(event)
+	c.queue.Append(event)
 
 	// report last sending error
 	lastErr := c.getErr()
@@ -161,7 +161,18 @@ func (c *CloudWatchWriter) queueMonitor() {
 	for {
 		// Flush all queued logs and close logger
 		if c.flush {
+			batch = nil
+			batchSize = 0
+			messageSize := 0
+
+			// Get as many recent logs as we can to send out before closing
+			for len(batch) < maxNumLogEvents || batchSize+messageSize <= batchSizeLimit {
+				tailLog, _ := c.queue.Pop() // Get latest log
+				messageSize = len(*tailLog.Message) + additionalBytesPerLogEvent
+				batch = append([]types.InputLogEvent{*tailLog}, batch...) // Prepend log to maintain order
+			}
 			c.sendBatch(batch, 0)
+
 			// At this point we've processed all the logs and can safely
 			// close.
 			close(c.done)
@@ -175,7 +186,7 @@ func (c *CloudWatchWriter) queueMonitor() {
 			nextSendTime.Add(c.getBatchInterval())
 		}
 
-		logEvent, _ := c.queue.Dequeue()
+		logEvent, _ := c.queue.Shift()
 		if logEvent == nil {
 			// Empty queue, means no logs to process
 			if c.isClosing() {
