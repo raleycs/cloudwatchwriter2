@@ -53,6 +53,7 @@ type CloudWatchWriter struct {
 	nextSequenceToken *string
 	closing           bool
 	done              chan struct{}
+	flush             bool	
 }
 
 // NewWithClient returns a pointer to a CloudWatchWriter struct, or an error. Works with AWS SDK v1 interface.
@@ -158,6 +159,15 @@ func (c *CloudWatchWriter) queueMonitor() {
 	nextSendTime := time.Now().Add(c.getBatchInterval())
 
 	for {
+		// Flush all queued logs and close logger
+		if c.flush {
+			c.sendBatch(batch, 0)
+			// At this point we've processed all the logs and can safely
+			// close.
+			close(c.done)
+			return
+		}
+
 		if time.Now().After(nextSendTime) {
 			c.sendBatch(batch, 0)
 			batch = nil
@@ -235,6 +245,7 @@ func (c *CloudWatchWriter) sendBatch(batch []types.InputLogEvent, retryNum int) 
 // Close blocks until the writer has completed writing the logs to CloudWatch.
 func (c *CloudWatchWriter) Close() {
 	c.setClosing()
+	c.flush = true
 	// block until the done channel is closed
 	<-c.done
 }
